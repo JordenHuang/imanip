@@ -1,12 +1,17 @@
 CC=gcc
 CFALGS=-Wall -Wextra
 
-all: amf
+target=amf.out
 
-amf: arithmetic_mean_filter.c
-	$(CC) $(CFALGS) arithmetic_mean_filter.c -o amf -lm
-	./amf
+all: $(target)
 
-.PHONY: show
+amf.out: arithmetic_mean_filter.c
+	$(CC) $(CFALGS) arithmetic_mean_filter.c -o amf.out -lm
+	./amf.out
+
+.PHONY: show clean
 show:
 	feh -F ./wallhaven-vqlr98.png ./arithmetic_mean_filter.png
+
+clean:
+	rm *.out
