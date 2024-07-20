@@ -3,9 +3,9 @@
 #include <math.h>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
+#include "./stb_library/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "./stb_library/stb_image_write.h"
 
 int power(int x)
 {
@@ -99,8 +99,7 @@ unsigned char *arithmetic_mean_filter(int w, int h, int channel, unsigned char *
 
 int main(void)
 {
-    // const char *filename = "./images/wallhaven-o587o9.jpg";
-    const char *filename = "./images/wallhaven-vqlr98.png";
+    const char *filename = "../images/baboon.png";
     int img_width, img_height, channel;
     unsigned char *pixels = stbi_load(filename, &img_width, &img_height, &channel, 0);
     printf("width: %d, height: %d, channel: %d\n", img_width, img_height, channel);
@@ -112,16 +111,17 @@ int main(void)
     int out_width = img_width;
     int out_height = img_height;
     int out_channel = channel;
-    unsigned char *out_pixels = arithmetic_mean_filter(img_width, img_height, channel, pixels, 19);
+    unsigned char *out_pixels = arithmetic_mean_filter(img_width, img_height, channel, pixels, 7);
 
 
     // Output grayscale img
     // char *gray_filename = "gray.png";
-    // if (!stbi_write_png(gray_filename, out_width, out_height, 1, gray_pixels, out_width*1)) {
+    // if (!stbi_write_png(gray_filename, img_width, img_height, 1, gray_pixels, img_width*1)) {
     //     fprintf(stderr, "Cannot write file [%s]\n", gray_filename);
     // } else {
     //     fprintf(stdout, "Writing file [%s] successfully\n", gray_filename);
     // }
+    // free(gray_pixels);
 
     // Output blur img
     char *out_filename = "arithmetic_mean_filter.png";
@@ -130,10 +130,9 @@ int main(void)
     } else {
         fprintf(stdout, "Writing file [%s] successfully\n", out_filename);
     }
+    free(out_pixels);
 
     stbi_image_free(pixels);
-    // free(gray_pixels);
-    free(out_pixels);
 
     return 0;
 }
