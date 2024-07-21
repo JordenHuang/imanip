@@ -1,7 +1,7 @@
 CC=gcc
 CFALGS=-Wall -Wextra
 
-target=amf.out gf.out
+target=amf.out gf.out sobel.out
 
 all: $(target)
 
@@ -12,6 +12,9 @@ amf.out: arithmetic_mean_filter.c
 gf.out: gaussian_filter.c
 	$(CC) $(CFALGS) gaussian_filter.c -o gf.out -lm
 	# ./gf.out
+
+sobel.out: sobel.c
+	$(CC) $(CFALGS) sobel.c -o sobel.out -lm
 
 .PHONY: clean
 clean:
