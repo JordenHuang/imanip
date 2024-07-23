@@ -12,25 +12,121 @@ typedef struct {
     unsigned char *data;// image pixel data
 } Img;
 
-void iman_convolution_i(Img dst, int *kernal, int k_size, int stride);
+void iman_img_new(Img *dst, int w, int h, int channel);
+
+void iman_img_free(Img *src);
+
+void iman_img_copy(Img *dst, const Img src);
+
+void iman_threshold(Img dst, const Img src, int max_val, int threshold);
+
+void iman_convolution_lf(Img dst, Img src, int kx, int ky, double *kernal);
 
 // Turn src image into grayscale, store to dst
-void iman_grayscale(Img dst, Img src);
+void iman_grayscale(Img dst, const Img src);
 // Apply kernal_size*kernal_size arithmetic mean filter to src, store to dst
-void iman_arithmetic_mean_filter(Img dst, Img src, int kernal_size);
+void iman_arithmetic_mean_filter(Img dst, const Img src, int kernal_size);
 // Generate 1d gaussian kernal
 double *iman_gaussian_kernal_1d_gen(int kx, double sigx);
 // Apply kx*ky size with sigma x and sigma y gaussian kernal on src, sotre to dst
-void iman_gaussian_blur(Img dst, Img src, int kx, int ky, double sigx, double sigy);
+void iman_gaussian_blur(Img dst, const Img src, int kx, int ky, double sigx, double sigy);
 // Apply sobel operator on src, store to dst. Kernal size is 3*3
 // If threshold is NOT between 0 and 255, no threshold is used
-void iman_sobel(Img dst, Img src, int threshold);
+void iman_sobel(Img dst, const Img src, int threshold);
 
 #endif // IMANIP_H
 
 #ifdef IMANIP_IMPLEMENTATION
 
 #include <math.h>
+
+void iman_img_new(Img *dst, int w, int h, int channel)
+{
+    (*dst).w = w;
+    (*dst).h = h;
+    (*dst).channel = channel;
+    (*dst).data = malloc(sizeof(unsigned char) * w * h * channel);
+}
+
+void iman_img_free(Img *src)
+{
+    free((*src).data);
+    (*src).data = NULL;
+}
+
+void iman_img_copy(Img *dst, const Img src)
+{
+    (*dst).w = src.w;
+    (*dst).h = src.h;
+    (*dst).channel = src.channel;
+    (*dst).data = malloc(sizeof(unsigned char) * src.w * src.h * src.channel);
+    int i;
+    for (i=0; i < src.w * src.h * src.channel; ++i) {
+        (*dst).data[i] = src.data[i];
+    }
+}
+
+void iman_threshold(Img dst, const Img src, int max_val, int threshold)
+{
+    int i;
+    for (i=0; i < src.w * src.h * src.channel; ++i) {
+        if (src.data[i] > threshold) {
+            dst.data[i] = max_val;
+        } else {
+            dst.data[i] = 0;
+        }
+    }
+}
+
+void iman_convolution_lf(Img dst, Img src, int kx, int ky, double *kernal)
+{
+    if (kx%2 != 1 || ky%2 != 1 ) {
+        fprintf(stderr, "kernal size must be odd number, not (%d, %d)", kx, ky);
+        return;
+    } else if (kx == 1 || ky == 1) {
+        fprintf(stderr, "kernal size must greater than 1, not (%d, %d)", kx, ky);
+        return;
+    }
+
+    int hkx = kx / 2;
+    int hky = ky / 2;
+    int kidx;
+
+    int w=src.w, h=src.h, channel=src.channel;
+    int i, j, idx, column_size = w*channel;
+    int fi, fj, fidx;
+
+    int sum_size, k;
+    if (channel <= 2) sum_size = 1;
+    else sum_size = 3;
+    double sum[sum_size];
+
+    for (i=0; i<h; ++i) {
+        for (j=0; j<column_size; ++j) {
+            idx = j + i*column_size;
+
+            for (k=0; k<sum_size; ++k) {
+                sum[k] = 0;
+            }
+            kidx = 0;
+
+            for (fi=i-hky; fi<=i+hky; ++fi) {
+                for (fj=j-hkx*channel; fj<=j+hkx*channel; fj+=channel) {
+                    if (fi<0 || fi>=h || fj<0 || fj>=column_size) continue;
+                    fidx = fj + fi * column_size;
+                    // for each channel
+                    for (k=0; k<sum_size; ++k) {
+                        sum[k] += (double)src.data[fidx + k] * kernal[kidx];
+                    }
+                    ++kidx;
+                }
+            }
+            for (k=0; k<sum_size; ++k) {
+                dst.data[idx + k] = (unsigned char)sum[k];
+            }
+        }
+    }
+}
 
 void iman_grayscale(Img dst, const Img src)
 {
@@ -134,7 +230,7 @@ double *iman_gaussian_kernal_1d_gen(int kx, double sigx)
     return kernal;
 }
 
-void iman_gaussian_blur(Img dst, Img src, int kx, int ky, double sigx, double sigy)
+void iman_gaussian_blur(Img dst, const Img src, int kx, int ky, double sigx, double sigy)
 {
     if (kx%2 != 1 || ky%2 != 1 ) {
         fprintf(stderr, "kernal size must be odd number, not (%d, %d)", kx, ky);
@@ -213,14 +309,14 @@ void iman_gaussian_blur(Img dst, Img src, int kx, int ky, double sigx, double si
     free(hori);
 }
 
-void iman_sobel(Img dst, Img src, int threshold)
+void iman_sobel(Img dst, const Img src, int threshold)
 {
     if (dst.channel != 1){
         fprintf(stderr, "[Error] destination image channel must be 1, i.e. grayscale image");
         return;
     }
 
-    int w=src.w, h=src.h, channel=src.channel;
+    int w=src.w, h=src.h;
     unsigned char *data = src.data;
 
     int s_half = 1;

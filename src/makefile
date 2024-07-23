@@ -14,7 +14,7 @@ gf.out: gaussian_filter.c
 sobel.out: sobel.c
 	$(CC) $(CFALGS) sobel.c -o sobel.out -lm
 
-main_imanip.out: main_imanip.c
+main_imanip.out: main_imanip.c imanip.h
 	$(CC) $(CFALGS) main_imanip.c -o main_imanip.out -lm
 
 .PHONY: clean
