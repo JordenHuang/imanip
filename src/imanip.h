@@ -13,15 +13,10 @@ typedef struct {
 } Img;
 
 void iman_img_new(Img *dst, int w, int h, int channel);
-
 void iman_img_free(Img *src);
-
 void iman_img_copy(Img *dst, const Img src);
-
 void iman_threshold(Img dst, const Img src, int max_val, int threshold);
-
-void iman_convolution_lf(Img dst, Img src, int kx, int ky, double *kernal);
-
+void iman_convolution(Img dst, Img src, int kx, int ky, double *kernal);
 // Turn src image into grayscale, store to dst
 void iman_grayscale(Img dst, const Img src);
 // Apply kernal_size*kernal_size arithmetic mean filter to src, store to dst
@@ -33,6 +28,11 @@ void iman_gaussian_blur(Img dst, const Img src, int kx, int ky, double sigx, dou
 // Apply sobel operator on src, store to dst. Kernal size is 3*3
 // If threshold is NOT between 0 and 255, no threshold is used
 void iman_sobel(Img dst, const Img src, int threshold);
+// sobel operator, with edge direction
+// param: destination, direction matrix, source image, threshold
+void iman_sobel_with_direction(Img dst, double *direction, const Img src, int threshold);
+// Apply canny edge detection on src, store to dst
+void iman_canny(Img dst, const Img src, const int threshold1, const int threshold2);
 
 #endif // IMANIP_H
 
@@ -78,7 +78,7 @@ void iman_threshold(Img dst, const Img src, int max_val, int threshold)
     }
 }
 
-void iman_convolution_lf(Img dst, Img src, int kx, int ky, double *kernal)
+void iman_convolution(Img dst, Img src, int kx, int ky, double *kernal)
 {
     if (kx%2 != 1 || ky%2 != 1 ) {
         fprintf(stderr, "kernal size must be odd number, not (%d, %d)", kx, ky);
@@ -312,7 +312,7 @@ void iman_gaussian_blur(Img dst, const Img src, int kx, int ky, double sigx, dou
 void iman_sobel(Img dst, const Img src, int threshold)
 {
     if (dst.channel != 1){
-        fprintf(stderr, "[Error] destination image channel must be 1, i.e. grayscale image");
+        fprintf(stderr, "[Error] destination image channel must be 1, i.e. grayscale image\n");
         return;
     }
 
@@ -369,6 +369,151 @@ void iman_sobel(Img dst, const Img src, int threshold)
     }
 
     free(gx);
+}
+
+void iman_sobel_with_direction(Img dst, double *direction, const Img src, int threshold)
+{
+    if (dst.channel != 1){
+        fprintf(stderr, "[Error] destination image channel must be 1, i.e. grayscale image\n");
+        return;
+    }
+
+    int w=src.w, h=src.h;
+    unsigned char *data = src.data;
+
+    int s_half = 1;
+    int sx[] = {
+        1, 0, -1,
+        2, 0, -2,
+        1, 0, -1
+    };
+    int sy[] = {
+        1, 2, 1,
+        0, 0, 0,
+        -1, -2, -1
+    };
+    unsigned char *gx = malloc(sizeof(unsigned char) * w * h);
+    unsigned char *gy = dst.data;
+
+    int i, j, idx;
+    int fi, fj, fidx, sum_x, sum_y, c;
+    for (i=0; i<h; ++i) {
+        for (j=0; j<w; ++j) {
+            idx = j + i*w;
+            sum_x = 0;
+            sum_y = 0;
+            c = 0;
+            for (fi=i-s_half; fi<=i+s_half; ++fi) {
+                for (fj=j-s_half; fj<=j+s_half; ++fj) {
+                    if (fi<0 || fi>=h || fj<0 || fj>=w) continue;
+                    fidx = fj + fi*w;
+                    sum_x += data[fidx] * sx[c];
+                    sum_y += data[fidx] * sy[c];
+                    ++c;
+                }
+            }
+
+            int val = sqrt(pow(sum_x, 2) + pow(sum_y, 2));
+            if (threshold < 0 || threshold > 255) {
+                if (val > 255) val = 255;
+                else if (val < 0) val = 0;
+            } else {
+                if (val > threshold) val = 255;
+                else val = 0;
+            }
+            gy[idx] = val;
+            direction[idx] = atan2((double)sum_x, (double)sum_y);
+        }
+    }
+    free(gx);
+}
+
+void iman_canny(Img dst, const Img src, const int threshold1, const int threshold2)
+{
+    // To grayscale
+    Img gray;
+    if (src.channel != 1) {
+        iman_img_new(&gray, src.w, src.h, 1);
+        iman_grayscale(gray, src);
+    } else {
+        iman_img_copy(&gray, src);
+    }
+
+    // Apply gaussian filter
+    Img gaussian;
+    iman_img_new(&gaussian, gray.w, gray.h, gray.channel);
+    iman_gaussian_blur(gaussian, gray, 5, 5, 1.4, 1.4);
+
+    // Apply sobel operator
+    Img sobel;
+    iman_img_new(&sobel, gaussian.w, gaussian.h, gaussian.channel);
+    double *dir = malloc(sizeof(double) * sobel.w * sobel.h);
+    iman_sobel_with_direction(sobel, dir, gaussian, -1);
+    // Turn direction into angle
+    int i, j, idx;
+    for (i=0; i<sobel.h; ++i) {
+        for (j=0; j<sobel.w; ++j) {
+            idx = j + i*sobel.w;
+            dir[idx] = dir[idx] * 180.f / M_PI;
+            if (dir[idx] < 0) dir[idx] += 180;
+        }
+    }
+
+    // Non-maximum suppression
+    Img non_max;
+    iman_img_new(&non_max, sobel.w, sobel.h, sobel.channel);
+    double q, r;
+    for (i=0; i<sobel.h; ++i) {
+        for (j=0; j<sobel.w; ++j) {
+            idx = j + i*sobel.w;
+
+            // 45 degree, i.e. north-east and south-west direction
+            if (dir[idx] >= 22.5 && dir[idx] < 67.5) {
+                q = sobel.data[idx-sobel.w+1];
+                r = sobel.data[idx+sobel.w-1];
+            }
+            // 90 degree, i.e. north and south direction
+            else if (dir[idx] >= 67.5 && dir[idx] < 112.5) {
+                q = sobel.data[idx-sobel.w];
+                r = sobel.data[idx+sobel.w];
+            }
+            // 135 degree, i.e. north-west and south-east direction
+            else if (dir[idx] >= 112.5 && dir[idx] < 157.5) {
+                q = sobel.data[idx-sobel.w-1];
+                r = sobel.data[idx+sobel.w+1];
+            }
+            // 0 degree, i.e. east and west direction
+            // [0, 22.5) and [157.5, 180)
+            else {
+                q = sobel.data[idx+1];
+                r = sobel.data[idx-1];
+            }
+
+            if (sobel.data[idx] >= q && sobel.data[idx] >= r) {
+                non_max.data[idx] = sobel.data[idx];
+            } else {
+                non_max.data[idx] = 0;
+            }
+        }
+    }
+
+    // Double threshold
+
+
+    // TODO: testing (copying data to dst), needs remove when finish
+    for (i=0; i<non_max.h; ++i) {
+        for (j=0; j<non_max.w; ++j) {
+            idx = j + i*non_max.w;
+            dst.data[idx] = non_max.data[idx];
+        }
+    }
+    (void)threshold1;
+    (void)threshold2;
+
+    iman_img_free(&gray);
+    iman_img_free(&gaussian);
+    iman_img_free(&sobel);
+    iman_img_free(&non_max);
 }
 
 #endif // IMANIP_IMPLEMENTATION

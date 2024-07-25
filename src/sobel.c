@@ -1,3 +1,5 @@
+// TODO: Apply gaussian_blur first, then sobel operator
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
