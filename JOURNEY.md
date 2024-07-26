@@ -1,5 +1,12 @@
-## 2024-07-21
+## 2024-07-26
 
+- [Medium] canny edge detection: https://medium.com/@pomelyu5199/canny-edge-detector-%E5%AF%A6%E4%BD%9C-opencv-f7d1a0a57d19
+
+## 2024-07-25
+
+- canny edge detection: https://towardsdatascience.com/canny-edge-detection-step-by-step-in-python-computer-vision-b49c3a2d8123
+
+## 2024-07-21
 - sobel operator: https://en.wikipedia.org/wiki/Sobel_operator
 - sobel operator in zh_tw: https://zh.wikipedia.org/zh-tw/%E7%B4%A2%E4%BC%AF%E7%AE%97%E5%AD%90
 - sobel filter in larger size: https://stackoverflow.com/questions/9567882/sobel-filter-kernel-of-large-size/41065243#41065243

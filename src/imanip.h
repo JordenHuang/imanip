@@ -26,13 +26,11 @@ double *iman_gaussian_kernal_1d_gen(int kx, double sigx);
 // Apply kx*ky size with sigma x and sigma y gaussian kernal on src, sotre to dst
 void iman_gaussian_blur(Img dst, const Img src, int kx, int ky, double sigx, double sigy);
 // Apply sobel operator on src, store to dst. Kernal size is 3*3
+// The direction should have size src.w * src.h. If NULL, then skip direction calculation
 // If threshold is NOT between 0 and 255, no threshold is used
-void iman_sobel(Img dst, const Img src, int threshold);
-// sobel operator, with edge direction
-// param: destination, direction matrix, source image, threshold
-void iman_sobel_with_direction(Img dst, double *direction, const Img src, int threshold);
+void iman_sobel(Img dst, const Img src, double *direction, int threshold);
 // Apply canny edge detection on src, store to dst
-void iman_canny(Img dst, const Img src, const int threshold1, const int threshold2);
+void iman_canny(Img dst, const Img src, const int threshold_weak, const int threshold_strong);
 
 #endif // IMANIP_H
 
@@ -309,7 +307,7 @@ void iman_gaussian_blur(Img dst, const Img src, int kx, int ky, double sigx, dou
     free(hori);
 }
 
-void iman_sobel(Img dst, const Img src, int threshold)
+void iman_sobel(Img dst, const Img src, double *direction, int threshold)
 {
     if (dst.channel != 1){
         fprintf(stderr, "[Error] destination image channel must be 1, i.e. grayscale image\n");
@@ -361,74 +359,13 @@ void iman_sobel(Img dst, const Img src, int threshold)
                 else val = 0;
             }
             gy[idx] = val;
-            // if (val > threshold) gy[idx] = 255;
-            // else gy[idx] = 0;
-            // printf("%d ", gy[idx]);
-        }
-        // printf("\n");
-    }
-
-    free(gx);
-}
-
-void iman_sobel_with_direction(Img dst, double *direction, const Img src, int threshold)
-{
-    if (dst.channel != 1){
-        fprintf(stderr, "[Error] destination image channel must be 1, i.e. grayscale image\n");
-        return;
-    }
-
-    int w=src.w, h=src.h;
-    unsigned char *data = src.data;
-
-    int s_half = 1;
-    int sx[] = {
-        1, 0, -1,
-        2, 0, -2,
-        1, 0, -1
-    };
-    int sy[] = {
-        1, 2, 1,
-        0, 0, 0,
-        -1, -2, -1
-    };
-    unsigned char *gx = malloc(sizeof(unsigned char) * w * h);
-    unsigned char *gy = dst.data;
-
-    int i, j, idx;
-    int fi, fj, fidx, sum_x, sum_y, c;
-    for (i=0; i<h; ++i) {
-        for (j=0; j<w; ++j) {
-            idx = j + i*w;
-            sum_x = 0;
-            sum_y = 0;
-            c = 0;
-            for (fi=i-s_half; fi<=i+s_half; ++fi) {
-                for (fj=j-s_half; fj<=j+s_half; ++fj) {
-                    if (fi<0 || fi>=h || fj<0 || fj>=w) continue;
-                    fidx = fj + fi*w;
-                    sum_x += data[fidx] * sx[c];
-                    sum_y += data[fidx] * sy[c];
-                    ++c;
-                }
-            }
-
-            int val = sqrt(pow(sum_x, 2) + pow(sum_y, 2));
-            if (threshold < 0 || threshold > 255) {
-                if (val > 255) val = 255;
-                else if (val < 0) val = 0;
-            } else {
-                if (val > threshold) val = 255;
-                else val = 0;
-            }
-            gy[idx] = val;
-            direction[idx] = atan2((double)sum_x, (double)sum_y);
+            if (direction != NULL) direction[idx] = atan2((double)sum_y, (double)sum_x);
         }
     }
     free(gx);
 }
 
-void iman_canny(Img dst, const Img src, const int threshold1, const int threshold2)
+void iman_canny(Img dst, const Img src, const int threshold_weak, const int threshold_strong)
 {
     // To grayscale
     Img gray;
@@ -448,21 +385,21 @@ void iman_canny(Img dst, const Img src, const int threshold1, const int threshol
     Img sobel;
     iman_img_new(&sobel, gaussian.w, gaussian.h, gaussian.channel);
     double *dir = malloc(sizeof(double) * sobel.w * sobel.h);
-    iman_sobel_with_direction(sobel, dir, gaussian, -1);
+    iman_sobel(sobel, gaussian, dir, -1);
     // Turn direction into angle
     int i, j, idx;
     for (i=0; i<sobel.h; ++i) {
         for (j=0; j<sobel.w; ++j) {
             idx = j + i*sobel.w;
             dir[idx] = dir[idx] * 180.f / M_PI;
-            if (dir[idx] < 0) dir[idx] += 180;
+            if (dir[idx] < 0.f) dir[idx] += 180.f;
         }
     }
 
     // Non-maximum suppression
     Img non_max;
     iman_img_new(&non_max, sobel.w, sobel.h, sobel.channel);
-    double q, r;
+    unsigned char q, r;
     for (i=0; i<sobel.h; ++i) {
         for (j=0; j<sobel.w; ++j) {
             idx = j + i*sobel.w;
@@ -483,7 +420,7 @@ void iman_canny(Img dst, const Img src, const int threshold1, const int threshol
                 r = sobel.data[idx+sobel.w+1];
             }
             // 0 degree, i.e. east and west direction
-            // [0, 22.5) and [157.5, 180)
+            // [0, 22.5) and [157.5, 180]
             else {
                 q = sobel.data[idx+1];
                 r = sobel.data[idx-1];
@@ -498,6 +435,42 @@ void iman_canny(Img dst, const Img src, const int threshold1, const int threshol
     }
 
     // Double threshold
+    for (i=0; i<non_max.h; ++i) {
+        for (j=0; j<non_max.w; ++j) {
+            idx = j + i*non_max.w;
+            if (non_max.data[idx] > threshold_strong) {
+                non_max.data[idx] = 255;
+            } else if (non_max.data[idx] < threshold_weak) {
+                non_max.data[idx] = 0;
+            }
+        }
+    }
+
+    // Edge tracking by hysteresis
+    // TODO: Use stack to track all strong edges, check its neighbors
+    // if the neighbor become strong, push to stack
+    // see: https://medium.com/@pomelyu5199/canny-edge-detector-%E5%AF%A6%E4%BD%9C-opencv-f7d1a0a57d19#54f4
+    for (i=0; i<non_max.h; ++i) {
+        for (j=0; j<non_max.w; ++j) {
+            idx = j + i*non_max.w;
+            if (non_max.data[idx] <= threshold_strong && non_max.data[idx] >= threshold_weak) {
+                int fi, fj, flag=0;
+                for (fi=i-1; fi<=i+1; ++fi) {
+                    for (fj=j-1; fj<=j+1; ++fj) {
+                        if (fi<0 || fi>=non_max.h || fj<0 || fj>=non_max.w) continue;
+                        else if (fj + fi*non_max.w == idx) continue;
+                        if (non_max.data[fj + fi*non_max.w] == 255) {
+                            non_max.data[idx] = 255;
+                            flag = 1;
+                            break;
+                        }
+                    }
+                    if (flag) break;
+                }
+                if (!flag) non_max.data[idx] = 0;
+            }
+        }
+    }
 
 
     // TODO: testing (copying data to dst), needs remove when finish
@@ -505,14 +478,14 @@ void iman_canny(Img dst, const Img src, const int threshold1, const int threshol
         for (j=0; j<non_max.w; ++j) {
             idx = j + i*non_max.w;
             dst.data[idx] = non_max.data[idx];
+            // if (dst.data[idx] != 0 && dst.data[idx] != 255) printf("Something wrong\n");
         }
     }
-    (void)threshold1;
-    (void)threshold2;
 
     iman_img_free(&gray);
     iman_img_free(&gaussian);
     iman_img_free(&sobel);
+    free(dir);
     iman_img_free(&non_max);
 }
 
