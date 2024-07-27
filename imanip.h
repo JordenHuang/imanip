@@ -31,12 +31,17 @@ void iman_gaussian_blur(Img dst, const Img src, int kx, int ky, double sigx, dou
 void iman_sobel(Img dst, const Img src, double *direction, int threshold);
 // Apply canny edge detection on src, store to dst
 void iman_canny(Img dst, const Img src, const int threshold_weak, const int threshold_strong);
+// set seed to -1 for random seed (invoke time(NULL))
+void iman_noise(Img dst, int seed);
+void iman_xor(Img dst, Img src, Img mask);
 
 #endif // IMANIP_H
 
 #ifdef IMANIP_IMPLEMENTATION
 
 #include <math.h>
+#include <stdlib.h>
+#include <time.h>
 
 void iman_img_new(Img *dst, int w, int h, int channel)
 {
@@ -487,6 +492,36 @@ void iman_canny(Img dst, const Img src, const int threshold_weak, const int thre
     iman_img_free(&sobel);
     free(dir);
     iman_img_free(&non_max);
+}
+
+void iman_noise(Img dst, int seed)
+{
+    if (seed != -1) srand(seed);
+    else srand(time(NULL));
+
+    int i;
+    for (i=0; i<dst.w*dst.h*dst.channel; ++i) {
+        dst.data[i] = rand() % 255;
+    }
+}
+
+void iman_xor(Img dst, Img src, Img mask)
+{
+    if (dst.w != src.w || dst.w != mask.w || src.w != mask.w) {
+        fprintf(stderr, "dst, src and mask width not match");
+        return;
+    } else if (dst.h != src.h || dst.h != mask.h || src.h != mask.h) {
+        fprintf(stderr, "dst, src and mask height not match");
+        return;
+    } else if (dst.channel != src.channel || dst.channel != mask.channel || src.channel != mask.channel) {
+        fprintf(stderr, "dst, src and mask channel not match");
+        return;
+    }
+
+    int i;
+    for (i=0; i<dst.w*dst.h*dst.channel; ++i) {
+        dst.data[i] = src.data[i] ^ mask.data[i];
+    }
 }
 
 #endif // IMANIP_IMPLEMENTATION
