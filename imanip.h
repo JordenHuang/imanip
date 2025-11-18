@@ -33,7 +33,8 @@ Iman_Img iman_img_from_pixel_array(
     const int h,
     const int channel,
     const unsigned char *pixels);   // Copy an existing image
-void iman_img_free(Iman_Img *img);  // Release memory of the image using `id` from internal structure
+void iman_img_free(Iman_Img *img);  // Release memory of the image using `id`
+                                    // from internal structure
 Iman_Img iman_img_copy(const Iman_Img src);  // Copy an existing image
 
 Iman_Img iman_threshold(const Iman_Img src, int max_val, int threshold);
@@ -51,8 +52,13 @@ Iman_Img iman_sobel(const Iman_Img src, double *direction, int threshold);
 Iman_Img iman_canny(const Iman_Img src,
                     const int threshold_weak,
                     const int threshold_strong);
-Iman_Img iman_hough_space(const Iman_Img src, double rho_resolution, double theta_resolution);
-Da iman_hough_lines(const Iman_Img src, double rho_resolution, double theta_resolution, int threshold);
+Iman_Img iman_hough_space(const Iman_Img src,
+                          double rho_resolution,
+                          double theta_resolution);
+Iman_Img iman_hough_lines(const Iman_Img src,
+                    double rho_resolution,
+                    double theta_resolution,
+                    int threshold);
 /*
  */
 #endif  // IMANIP_H
@@ -497,9 +503,9 @@ Iman_Img iman_canny(const Iman_Img src,
     Iman_Img non_max = iman_img_new(sobel.w, sobel.h, 1);
     unsigned char q, r, tmp;
     double angle;
-    for (i=1; i<sobel.h - 1; ++i) {  // Skip border
-        for (j=1; j<sobel.w - 1; ++j) {  // Skip border
-            idx = j + i*sobel.w;
+    for (i = 1; i < sobel.h - 1; ++i) {      // Skip border
+        for (j = 1; j < sobel.w - 1; ++j) {  // Skip border
+            idx = j + i * sobel.w;
             angle = dir[idx];
 
             // 45 degree, i.e. north-east and south-west direction
@@ -514,14 +520,14 @@ Iman_Img iman_canny(const Iman_Img src,
             }
             // 135 degree, i.e. north-west and south-east direction
             else if (dir[idx] >= 112.5 && dir[idx] < 157.5) {
-                q = sobel.data[idx-sobel.w-1];
-                r = sobel.data[idx+sobel.w+1];
+                q = sobel.data[idx - sobel.w - 1];
+                r = sobel.data[idx + sobel.w + 1];
             }
             // 0 degree, i.e. east and west direction
             // [0, 22.5) and [157.5, 180]
             else {
-                q = sobel.data[idx+1];
-                r = sobel.data[idx-1];
+                q = sobel.data[idx + 1];
+                r = sobel.data[idx - 1];
             }
 
             // Keep pixel if its local maximum
@@ -534,9 +540,9 @@ Iman_Img iman_canny(const Iman_Img src,
     }
 
     // Double threshold
-    for (i=0; i<non_max.h; ++i) {
-        for (j=0; j<non_max.w; ++j) {
-            idx = j + i*non_max.w;
+    for (i = 0; i < non_max.h; ++i) {
+        for (j = 0; j < non_max.w; ++j) {
+            idx = j + i * non_max.w;
             if (non_max.data[idx] > threshold_strong) {
                 non_max.data[idx] = 255;
             } else if (non_max.data[idx] < threshold_weak) {
@@ -548,24 +554,28 @@ Iman_Img iman_canny(const Iman_Img src,
     // Edge tracking by hysteresis
     // By ChatGPT
     // TODO: Check, maybe use queue (BFS)
-    typedef struct { int x, y; } Point;
+    typedef struct {
+        int x, y;
+    } Point;
     Point *stack = malloc(sizeof(Point) * non_max.w * non_max.h);
     int top = 0;
     // Push all strong edges initially
-    for (i=0; i<non_max.h; ++i)
-        for (j=0; j<non_max.w; ++j)
-            if (non_max.data[i*non_max.w + j] == 255)
+    for (i = 0; i < non_max.h; ++i)
+        for (j = 0; j < non_max.w; ++j)
+            if (non_max.data[i * non_max.w + j] == 255)
                 stack[top++] = (Point){j, i};
 
     // DFS-style edge tracking
     while (top > 0) {
         Point p = stack[--top];
-        for (int dy=-1; dy<=1; ++dy) {
-            for (int dx=-1; dx<=1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
                 int x = p.x + dx, y = p.y + dy;
-                if (x<0 || x>=non_max.w || y<0 || y>=non_max.h) continue;
-                int idx2 = y*non_max.w + x;
-                if (non_max.data[idx2] >= threshold_weak && non_max.data[idx2] < 255) {
+                if (x < 0 || x >= non_max.w || y < 0 || y >= non_max.h)
+                    continue;
+                int idx2 = y * non_max.w + x;
+                if (non_max.data[idx2] >= threshold_weak &&
+                    non_max.data[idx2] < 255) {
                     non_max.data[idx2] = 255;
                     stack[top++] = (Point){x, y};
                 }
@@ -592,12 +602,15 @@ Iman_Img iman_canny(const Iman_Img src,
     return non_max;
 }
 
-Iman_Img iman_hough_space(const Iman_Img src, double rho_resolution, double theta_resolution)
+Iman_Img iman_hough_space(const Iman_Img src,
+                          double rho_resolution,
+                          double theta_resolution)
 {
     // Half length of image diagonal
-    double max_rho = sqrt(pow(src.h/2.f, 2) + pow(src.w/2.f, 2));
+    double max_rho = sqrt(pow(src.h / 2.f, 2) + pow(src.w / 2.f, 2));
     // hough space image width and height
-    int hs_img_w = M_PI / theta_resolution + 1; // 180 / (theta_resolution * 180.f / M_PI);
+    int hs_img_w = M_PI / theta_resolution +
+                   1;  // 180 / (theta_resolution * 180.f / M_PI);
     int hs_img_h = (2 * max_rho) / rho_resolution + 1;
     Iman_Img hs_img = iman_img_new(hs_img_w, hs_img_h, 1);
     // Accumulator
@@ -651,31 +664,38 @@ Iman_Img iman_hough_space(const Iman_Img src, double rho_resolution, double thet
             maxv = hs_acc[i];
 
     for (int i = 0; i < hs_img_w * hs_img_h; ++i)
-        hs_img.data[i] = (unsigned char)(hs_acc[i] / maxv * 255.0);
+        hs_img.data[i] = (unsigned char) (hs_acc[i] / maxv * 255.0);
 
     free(hs_acc);
     return hs_img;
 }
 
-Da iman_hough_lines(const Iman_Img src, double rho_resolution, double theta_resolution, int threshold)
+Iman_Img iman_hough_lines(const Iman_Img src,
+                    double rho_resolution,
+                    double theta_resolution,
+                    int threshold)
 {
+    // Result image (just for now)
+    // Iman_Img line_img = iman_img_copy(src);
+    Iman_Img line_img = iman_img_new(src.w, src.h, 1);
+
     // Half length of image diagonal
-    double max_rho = sqrt(pow(src.h/2.f, 2) + pow(src.w/2.f, 2));
+    double max_rho = sqrt(pow(src.h / 2.f, 2) + pow(src.w / 2.f, 2));
 
     // Transform edge pixels from xy space to hough space
     Iman_Img hs_img = iman_hough_space(src, rho_resolution, theta_resolution);
 
     // Loop through accumulator
     int rho_idx, theta_idx, hs_img_idx;
-    for (rho_idx = 0; rho_idx < max_rho; ++rho_idx) {
-        for (theta_idx = 0; theta_idx < 180; ++theta_idx) {
+    for (rho_idx = 0; rho_idx < hs_img.h; ++rho_idx) {
+        for (theta_idx = 0; theta_idx < hs_img.w; ++theta_idx) {
             hs_img_idx = rho_idx * hs_img.w + theta_idx;
             // Find accumulator that greater than threshold
             if (hs_img.data[hs_img_idx] >= threshold) {
-                // printf("Line detected: rho=%d, theta=%d\n", rho_idx, theta_idx);
+                printf("Line detected: rho=%d, theta=%d, val: %d\n", rho_idx, theta_idx, hs_img.data[hs_img_idx]);
 
                 // Transform to xy space
-                double rho = rho_idx - max_rho;
+                double rho = (rho_idx - max_rho);
                 double theta = theta_idx * M_PI / 180.f;
 
                 double ct = cos(theta);
@@ -684,20 +704,22 @@ Da iman_hough_lines(const Iman_Img src, double rho_resolution, double theta_reso
                 if (fabs(st) > fabs(ct)) {
                     // use x to get y
                     for (int x = 0; x < src.w; x++) {
-                        // Shift x, calc y, shift y back to original src image coordinate
-                        double y = -((rho - (x - src.w/2) * ct) / st - src.h/2);
+                        // Shift x, calc y, shift y back to original src image
+                        // coordinate
+                        double y = -((rho - (x - src.w / 2) * ct) / st - src.h / 2);
                         if (y >= 0 && y < src.h) {
-                            // line_img.data[(int)y * line_img.w + x] = 255;
+                            line_img.data[(int)y * line_img.w + x] = 255;
                             // TODO: Append to Da
                         }
                     }
                 } else {
                     // use y to get x
                     for (int y = 0; y < src.h; y++) {
-                        // Shift y, calc x, shift x back to original src image coordinate
-                        double x = (rho - ((-y + src.h/2) * st)) / ct + src.w/2;
+                        // Shift y, calc x, shift x back to original src image
+                        // coordinate
+                        double x = (rho - ((-y + src.h / 2) * st)) / ct + src.w / 2;
                         if (x >= 0 && x < src.w) {
-                            // line_img.data[y * line_img.w + (int)x] = 255;
+                            line_img.data[y * line_img.w + (int)x] = 255;
                             // TODO: Append to Da
                         }
                     }
@@ -705,6 +727,7 @@ Da iman_hough_lines(const Iman_Img src, double rho_resolution, double theta_reso
             }
         }
     }
+    return line_img;
 }
 
 #endif  // IMANIP_IMPLEMENTATION

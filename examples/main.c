@@ -11,7 +11,9 @@
 int main(void)
 {
     // Read the image
-    const char *filename = "./baboon.png";
+    // const char *filename = "./baboon.png";
+    // const char *filename = "../images/american_indian.jpg";
+    const char *filename = "../images/two_lines.png";
     int w, h, channel;
     unsigned char *pixels = stbi_load(filename, &w, &h, &channel, 0);
     printf("[%s] width: %d, height: %d, channel: %d\n", filename, w, h, channel);
@@ -64,7 +66,7 @@ int main(void)
     }
 #endif
 
-#if 0
+#if 0 /* Hough line detection */
     double p_rho = 1, p_theta = M_PI/180; // Resolution of rho and theta
     int threshold = 35;
 
@@ -193,27 +195,26 @@ int main(void)
 #endif
 
 
-
+    /* Hough line detection */
     // Canny
     // Iman_Img canny_img = iman_canny(img, 25, 75);
-    Iman_Img canny_img = iman_canny(img, 10, 10);
+    Iman_Img canny_img = iman_canny(img, 55, 95);
     char *canny_filename = "canny.png";
     if (!stbi_write_png(canny_filename, canny_img.w, canny_img.h, canny_img.channel, canny_img.data, canny_img.w*canny_img.channel)) {
         fprintf(stderr, "Cannot write file [%s]\n", canny_filename);
     }
 
     Iman_Img hs_img = iman_hough_space(canny_img, 1, 1 * M_PI/180.f);
-    // Visualize
-    // for (int y = 0; y < hs_img.h; ++y) {
-    //     for (int x = 0; x < hs_img.w; ++x) {
-    //         if (hs_img.data[y * hs_img.w + x] > 0)
-    //             hs_img.data[y * hs_img.w + x] = 255;
-    //     }
-    // }
-
     char *hs_filename = "hs.png";
     if (!stbi_write_png(hs_filename, hs_img.w, hs_img.h, hs_img.channel, hs_img.data, hs_img.w*hs_img.channel)) {
         fprintf(stderr, "Cannot write file [%s]\n", hs_filename);
+    }
+
+    Iman_Img line_img = iman_hough_lines(canny_img, 1, 1 * M_PI/180.f, 145);
+
+    char *line_filename = "line.png";
+    if (!stbi_write_png(line_filename, line_img.w, line_img.h, line_img.channel, line_img.data, line_img.w*line_img.channel)) {
+        fprintf(stderr, "Cannot write file [%s]\n", line_filename);
     }
 
     iman_exit();
